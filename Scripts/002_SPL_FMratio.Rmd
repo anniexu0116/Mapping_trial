@@ -31,7 +31,7 @@ SEA_map <- st_read(here("data/raw","04_SPL_Seattle_Map.geojson")) # base SEA nei
 ```
 
 # Recode the gender column 
-```{r}
+```{r, echo=FALSE}
 SPL_1823 <- SPL_1823 %>%
   mutate(
     gender=recode(staying_gender,
@@ -48,7 +48,7 @@ SPL_1823 <- SPL_1823 %>%
 ```
 
 # Calculate women/men ratio by neighborhood (S_HOOD)
-```{r}
+```{r, echo=F}
 FM_ratio <- SPL_1823 %>%
   group_by(S_HOOD, gender, study_id) %>%
   dplyr::summarise(count= n()) %>%
@@ -63,7 +63,7 @@ FM_ratio <- SPL_1823 %>%
 ```
 
 # Calculate women/men ratio by observation site (location_id)
-```{r}
+```{r, echo=F}
 FM_ratio_locid <- SPL_1823 %>%
   group_by(location_id, gender, study_id) %>%
   dplyr::summarise(count = n()) %>%
@@ -123,6 +123,8 @@ p <- ggplot() +
 
 
 p <- ggplotly(, tooltip = "text")
+
+p
 
 #Save the interactive plot ----
 saveWidget(p, here("Visualization", "2018_map_interactive.html"), selfcontained = FALSE, libdir = "libs")
