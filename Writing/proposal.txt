@@ -1,0 +1,33 @@
+PROPOSAL
+Group members: Annie Xu, Jovani Azpeitia, Rachel Song, Rebecca Schachtman
+
+2018 and 2023 people staying data:
+https://data.seattle.gov/Transportation/Public-Life-Data-People-Staying/5mzj-4rtf/about_data
+
+Geospatial data:
+https://data.seattle.gov/Transportation/Public-Life-Data-Geography/v4q3-5hvp/about_data
+
+Metadata:
+https://data.seattle.gov/api/views/5mzj-4rtf/files/1be2e294-248d-49fb-99d7-7325e4b083f5?download=true&filename=public_life_metadata.pdf
+
+2018 Report: 
+https://www.seattle.gov/documents/Departments/SDOT/UrbanDesignProgram/PublicLifeStudy_2018Summary_Report2%280%29.pdf
+
+Our project aims to examine the Seattle Public Life Study, a systematic 
+observation of how people use public space throughout the city. We will use 
+three datasets, one collected in 2018 and one in 2023 that describe people’s 
+patterns of staying in certain Seattle neighborhoods, and one mapping 
+geospatial data of Seattle neighborhoods. In these data, “people staying” is 
+defined by variables such as: staying time, sitting positions, and behaviors 
+while staying (e.g., talking to others, using electronics, smoking, eating, 
+etc.). More specifically, we are interested in examining the number of people 
+staying in each Seattle neighborhood by demographic variables such as age, 
+gender, and/or race, and how this has changed between 2018 and 2023. 
+
+We aim to 1) create two visualizations in which the data are mapped onto each 
+Seattle neighborhood (one for 2018 and one for 2023), and 2) run accompanying 
+statistical analyses quantifying change. In this project, we will practice 
+skills learned in class including version control and collaboration via GitHub, 
+data visualization, working with big data, and working with geospatial data (we 
+are not sure if this is in the scope of the class!).
+
