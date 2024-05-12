@@ -1,0 +1,213 @@
+---
+title: "002_SPL_FMratio"
+output: html_document
+date: "2024-04-16"
+---
+
+Recodes gender, calculates female:male ratio by neighborhood and location_id, and maps the female:male ratio
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Load required packages
+```{r}
+rm(list=ls())
+library(tidyverse)
+library(psych)
+library(dplyr)
+library(sf)
+library(here)
+library(ggplot2)
+library(plotly) #interactive plots
+library(htmlwidgets)
+```
+
+# Import data
+```{r}
+SPL_1823 <- read.csv(here("data","SPL_1823.csv"))
+SPL_1823_geo <- st_read(here("data", "SPL_1823_location.geojson")) # location_id shapefiles and lat/long coordinates
+SEA_map <- st_read(here("data/raw","04_SPL_Seattle_Map.geojson")) # base SEA neighborhood map
+```
+
+# Recode the gender column 
+```{r, echo=FALSE}
+SPL_1823 <- SPL_1823 %>%
+  mutate(
+    gender=recode(staying_gender,
+                        "Female"="Fem",
+                        "Feminine presenting"="Fem",
+                        "Gender-non-conforming presenting" = "non_conforming",
+                        "Male"="Masc",
+                        "Masculine presenting"="Masc",
+                        "Other_Unsure"="Unsure",
+                        "Unsure"="Unsure"))
+
+# table(SPL_1823$gender)
+# table(SPL_1823$staying_gender)
+```
+
+# Calculate women/men ratio by neighborhood (S_HOOD)
+```{r, echo=F}
+FM_ratio <- SPL_1823 %>%
+  group_by(S_HOOD, gender, study_id) %>%
+  dplyr::summarise(count= n()) %>%
+  pivot_wider(
+    id_cols = c(S_HOOD, study_id),
+    names_from = gender,
+    values_from = count,
+    names_prefix = "Observed_"
+  ) %>%
+  mutate(FM_ratio = round(Observed_Fem/Observed_Masc, 2)) %>%
+  select(S_HOOD, study_id, FM_ratio)
+```
+
+# Calculate women/men ratio by observation site (location_id)
+```{r, echo=F}
+FM_ratio_locid <- SPL_1823 %>%
+  group_by(location_id, gender, study_id) %>%
+  dplyr::summarise(count = n()) %>%
+  pivot_wider(
+    id_cols = c(location_id, study_id),
+    names_from = gender,
+    values_from = count,
+    names_prefix = "Observed_"
+  ) %>%
+  mutate(FM_ratio = round(Observed_Fem/Observed_Masc, 2)) %>%
+  select(location_id, study_id, FM_ratio)
+```
+
+# Create map by neighborhood - neighborhood fill corresponds to women/men ratio
+
+## 2018 map
+```{r}
+# Filter 2018 data ----
+FM_ratio_18 <- FM_ratio %>%
+  filter(study_id=="2018_Seattle_Citywide")
+
+# Join the city map with 2018 filtered data ----
+FM_ratio_18_geo <- left_join(SEA_map, FM_ratio_18, by = "S_HOOD")
+
+# Creating the plot----
+ggplot() +
+  geom_sf(data = FM_ratio_18_geo, aes(fill = FM_ratio)) +
+  scale_fill_gradient(name = "Female-to-male staying ratio",
+                      low = "lightblue", high = "pink", na.value = "gray",
+                      guide = guide_colorbar(title.position = "top")) +
+  labs(title = "2018 Female-to-Male Staying Ratio by Seattle Neighborhood ") +
+  theme_minimal()+
+  theme(
+    plot.title = element_text(family = "Times New Roman", size = 16, face = "bold"),
+    axis.title.x = element_blank(),  
+    axis.title.y = element_blank() 
+  )
+
+
+# Save 2018 map as an PNG in the Visualization folder ----
+ggsave(filename = "2018_FMratio_map.png", path = here("Visualization"), bg="white", height = 7, width = 7)
+
+
+
+# Create the interactive plot ----
+p <- ggplot() +
+  geom_sf(data = FM_ratio_18_geo, aes(fill = FM_ratio, text = paste("Neighborhood: ", S_HOOD, "<br>Female-to-Male Ratio: ", FM_ratio))) +
+  # geom_text(data = FM_ratio_18_geo, aes(label = S_HOOD, x=longitude, y=latitude), size = 3, color = "black", check_overlap = TRUE)+ #Need to troubleshoot
+  scale_fill_gradient(name = "Female-to-male staying ratio",
+                      low = "lightblue", high = "pink", na.value = "gray",
+                      guide = guide_colorbar(title.position = "top")) +
+  labs(title = "2018 Female-to-Male Staying Ratio by Seattle Neighborhood ") +
+  theme_minimal()+
+  theme(
+    plot.title = element_text(family = "Times New Roman", size = 16, face = "bold")
+  )
+
+
+p <- ggplotly(, tooltip = "text")
+
+p
+
+#Save the interactive plot ----
+saveWidget(p, here("Visualization", "2018_map_interactive.html"), selfcontained = FALSE, libdir = "libs")
+```
+
+## 2023 map
+```{r}
+# Filter 2023 data ----
+FM_ratio_23 <- FM_ratio %>%
+  filter(study_id=="2023_Seattle_Citywide")
+
+# Join the city map with 2023 filtered data ---
+FM_ratio_23_geo <- left_join(SEA_map, FM_ratio_23, by = "S_HOOD")
+
+ggplot() +
+  geom_sf(data = FM_ratio_23_geo, aes(fill = FM_ratio)) +
+  # geom_text(data = FM_ratio_23_geo, aes(label = S_HOOD, x=longitude, y=latitude), size = 3, color = "black", check_overlap = TRUE)+ #Need to troubleshoot
+  scale_fill_gradient(name = "Female-to-male staying ratio",
+                      low = "lightblue", high = "pink", na.value = "gray",
+                      guide = guide_colorbar(title.position = "top")) +
+  labs(title = "2023 Female-to-Male Staying Ratio by Seattle Neighborhood ") +
+  theme_minimal()+
+  theme(
+    plot.title = element_text(family = "Times New Roman", size = 16, face = "bold")
+  )
+
+# Save 2023 map as an PNG in the Visualization folder ----
+ggsave(filename = "2023_FMratio_map.png", path = here("Visualization"), bg="white", width = 7, height = 7)
+```
+
+# Create map by dots (dots represent block face; color represents proportion)
+
+## 2018 map
+```{r}
+# Filter 2018 data ----
+FM_ratio_18_locid <- FM_ratio_locid %>% filter(study_id == "2018_Seattle_Citywide")
+
+# Join location_id coordinates with 2018 filtered data ----
+FM_ratio_18_locid_geo <- left_join(FM_ratio_18_locid, SPL_1823_geo, by = "location_id")
+
+ggplot() +
+  geom_sf(data = SEA_map) + #plot base SEA neighborhood map
+  geom_point(data=FM_ratio_18_locid_geo, aes(x=longitude, y=latitude, color = FM_ratio),shape=20, size=4) + # add points
+  scale_color_continuous(name="Female to Male Ratio",
+                        low = "lightblue", high = "darkblue") +
+  labs(title = "2018 Female-to-Male Staying Ratio by Observation Site") +
+  labs(fill="Observation Sites")
+
+# Save Map_2018_dot in the Visualization folder ----
+ggsave(filename = "2018_FMratio_map_dot.png", path = here("Visualization"), bg="white", width = 7, height = 7)
+```
+
+## 2023 map
+```{r}
+# Filter 2023 data ----
+FM_ratio_23_locid <- FM_ratio_locid %>% filter(study_id == "2023_Seattle_Citywide")
+
+# Join location_id coordinates with 2023 filtered data ----
+FM_ratio_23_locid_geo <- left_join(FM_ratio_23_locid, SPL_1823_geo, by = "location_id")
+
+ggplot() +
+  geom_sf(data = SEA_map) + #plot base SEA neighborhood map
+  geom_point(data=FM_ratio_23_locid_geo, aes(x=longitude, y=latitude, color = FM_ratio),shape=20, size=3) + # add points
+  #scale_size_continuous(range=c(1,6))+
+  scale_color_continuous(name="Female to Male Ratio",
+                        low = "lightblue", high = "darkblue")+
+  labs(title = "2023 Female-to-Male Staying Ratio by Observation Site") +
+  labs(fill="Observation Sites")
+
+
+# Save Map_2023_dot in the Visualization folder ----
+ggsave(filename = "2023_FMratio_map_dot.png", path = here("Visualization"), bg="white", width = 7, height = 7)
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
