@@ -31,7 +31,7 @@ SEA_map <- st_read(here("data/raw","04_SPL_Seattle_Map.geojson")) # base SEA nei
 ```
 
 # Recode the gender column 
-```{r, echo=FALSE}
+```{r}
 SPL_1823 <- SPL_1823 %>%
   mutate(
     gender=recode(staying_gender,
@@ -48,7 +48,7 @@ SPL_1823 <- SPL_1823 %>%
 ```
 
 # Calculate women/men ratio by neighborhood (S_HOOD)
-```{r, echo=F}
+```{r}
 FM_ratio <- SPL_1823 %>%
   group_by(S_HOOD, gender, study_id) %>%
   dplyr::summarise(count= n()) %>%
@@ -63,7 +63,7 @@ FM_ratio <- SPL_1823 %>%
 ```
 
 # Calculate women/men ratio by observation site (location_id)
-```{r, echo=F}
+```{r}
 FM_ratio_locid <- SPL_1823 %>%
   group_by(location_id, gender, study_id) %>%
   dplyr::summarise(count = n()) %>%
@@ -124,8 +124,6 @@ p <- ggplot() +
 
 p <- ggplotly(, tooltip = "text")
 
-p
-
 #Save the interactive plot ----
 saveWidget(p, here("Visualization", "2018_map_interactive.html"), selfcontained = FALSE, libdir = "libs")
 ```
@@ -155,6 +153,8 @@ ggplot() +
 ggsave(filename = "2023_FMratio_map.png", path = here("Visualization"), bg="white", width = 7, height = 7)
 ```
 
+
+
 # Create map by dots (dots represent block face; color represents proportion)
 
 ## 2018 map
@@ -167,14 +167,35 @@ FM_ratio_18_locid_geo <- left_join(FM_ratio_18_locid, SPL_1823_geo, by = "locati
 
 ggplot() +
   geom_sf(data = SEA_map) + #plot base SEA neighborhood map
-  geom_point(data=FM_ratio_18_locid_geo, aes(x=longitude, y=latitude, color = FM_ratio),shape=20, size=4) + # add points
-  scale_color_continuous(name="Female to Male Ratio",
-                        low = "lightblue", high = "darkblue") +
+  geom_point(data=FM_ratio_18_locid_geo, aes(x=longitude, y=latitude, color = FM_ratio, 
+                                             alpha = 0.95),shape=20, size=4) + # add points
+  scale_color_gradientn(name="Female to Male Staying Ratio",
+                       colours = c("brown","lightyellow","blue"), #Specify the colors for each end 
+                       breaks = c(0, 0.5, 1, 1.5, 2, max(FM_ratio_18_locid_geo$FM_ratio))) + #Create the breaks
+  scale_alpha_continuous(guide = "none")+
   labs(title = "2018 Female-to-Male Staying Ratio by Observation Site") +
   labs(fill="Observation Sites")
 
 # Save Map_2018_dot in the Visualization folder ----
 ggsave(filename = "2018_FMratio_map_dot.png", path = here("Visualization"), bg="white", width = 7, height = 7)
+```
+
+# 2018 interactive dot plot 
+```{r}
+p <- ggplot() +
+  geom_sf(data = SEA_map) + #plot base SEA neighborhood map
+  geom_point(data=FM_ratio_18_locid_geo, aes(x=longitude, y=latitude, color = FM_ratio, 
+                                             text = paste("Block Face: ", location_id, "<br>Female-to-Male Ratio: ", FM_ratio),
+                                             alpha = 0.95),shape=20, size=4) + # add points
+  scale_color_gradientn(name="Female to Male Staying Ratio",
+                       colours = c("brown","lightyellow","blue"), #Specify the colors for each end 
+                       breaks = c(0, 0.5, 1, 1.5, 2, max(FM_ratio_18_locid_geo$FM_ratio))) + #Create the breaks
+  scale_alpha_continuous(guide = "none")+
+  labs(title = "2018 Female-to-Male Staying Ratio by Observation Site (interactive)") +
+  labs(fill="Observation Sites")
+
+ggplotly(p, tooltip = "text")
+
 ```
 
 ## 2023 map
@@ -187,17 +208,37 @@ FM_ratio_23_locid_geo <- left_join(FM_ratio_23_locid, SPL_1823_geo, by = "locati
 
 ggplot() +
   geom_sf(data = SEA_map) + #plot base SEA neighborhood map
-  geom_point(data=FM_ratio_23_locid_geo, aes(x=longitude, y=latitude, color = FM_ratio),shape=20, size=3) + # add points
-  #scale_size_continuous(range=c(1,6))+
-  scale_color_continuous(name="Female to Male Ratio",
-                        low = "lightblue", high = "darkblue")+
+  geom_point(data=FM_ratio_23_locid_geo, aes(x=longitude, y=latitude, color = FM_ratio, alpha = 0.9),shape=20, size=4) + # add points
+  scale_color_gradientn(name="Female to Male Staying Ratio",
+                       colours = c("brown","lightyellow","blue"), #Specify the colors for each end 
+                       breaks = c(0, 0.5, 1, 1.5, 2, max(FM_ratio_23_locid_geo$FM_ratio))) + #Create the breaks
+  scale_alpha_continuous(guide = "none")+
   labs(title = "2023 Female-to-Male Staying Ratio by Observation Site") +
   labs(fill="Observation Sites")
+
 
 
 # Save Map_2023_dot in the Visualization folder ----
 ggsave(filename = "2023_FMratio_map_dot.png", path = here("Visualization"), bg="white", width = 7, height = 7)
 
+```
+
+## 2023 interactive dot map
+```{r}
+p <- ggplot() +
+  geom_sf(data = SEA_map) + #plot base SEA neighborhood map
+  geom_point(data=FM_ratio_23_locid_geo, aes(x=longitude, y=latitude, color = FM_ratio, 
+                                             text = paste("Block Face: ", location_id, "<br>Female-to-Male Ratio: ", FM_ratio),
+                                             alpha = 0.9),shape=20, size=4) + # add points
+  scale_color_gradientn(name="Female to Male Staying Ratio",
+                       colours = c("brown","lightyellow","blue"), #Specify the colors for each end 
+                       breaks = c(0, 0.5, 1, 1.5, 2, max(FM_ratio_23_locid_geo$FM_ratio))) + #Create the breaks
+  scale_alpha_continuous(guide = "none")+
+  labs(title = "2023 Female-to-Male Staying Ratio by Observation Site") +
+  labs(fill="Observation Sites")
+
+
+ggplotly(p, tooltip = "text")
 ```
 
 
