@@ -21,6 +21,7 @@ library(here)
 library(ggplot2)
 library(plotly) #interactive plots
 library(htmlwidgets)
+
 ```
 
 # Import data
@@ -109,8 +110,9 @@ ggsave(filename = "2018_FMratio_map.png", path = here("Visualization"), bg="whit
 
 
 # Create the interactive plot ----
-p <- ggplot() +
-  geom_sf(data = FM_ratio_18_geo, aes(fill = FM_ratio, text = paste("Neighborhood: ", S_HOOD, "<br>Female-to-Male Ratio: ", FM_ratio))) +
+
+ggplot() +
+  geom_sf(data = FM_ratio_18_geo, aes(fill = FM_ratio)) +
   # geom_text(data = FM_ratio_18_geo, aes(label = S_HOOD, x=longitude, y=latitude), size = 3, color = "black", check_overlap = TRUE)+ #Need to troubleshoot
   scale_fill_gradient(name = "Female-to-male staying ratio",
                       low = "lightblue", high = "pink", na.value = "gray",
@@ -120,12 +122,6 @@ p <- ggplot() +
   theme(
     plot.title = element_text(family = "Times New Roman", size = 16, face = "bold")
   )
-
-
-p <- ggplotly(, tooltip = "text")
-
-#Save the interactive plot ----
-saveWidget(p, here("Visualization", "2018_map_interactive.html"), selfcontained = FALSE, libdir = "libs")
 ```
 
 ## 2023 map
@@ -194,7 +190,11 @@ p <- ggplot() +
   labs(title = "2018 Female-to-Male Staying Ratio by Observation Site (interactive)") +
   labs(fill="Observation Sites")
 
-ggplotly(p, tooltip = "text")
+p <- ggplotly(, tooltip = "text")
+
+#Save the interactive dot plot
+saveWidget(p, here("Interactive", "2018_map_interactive.html"), selfcontained = FALSE, libdir = "libs")
+```
 
 ```
 
@@ -215,7 +215,6 @@ ggplot() +
   scale_alpha_continuous(guide = "none")+
   labs(title = "2023 Female-to-Male Staying Ratio by Observation Site") +
   labs(fill="Observation Sites")
-
 
 
 # Save Map_2023_dot in the Visualization folder ----
