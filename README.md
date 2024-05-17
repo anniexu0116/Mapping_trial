@@ -1,4 +1,4 @@
-# Can I integrate an interactive plot here?
-I will try to put the interactive plot here
+# You can find the interactive plot here
+## This is the 2018 interactive plot for Female-to-male staying ratio by observation sites. You can drag your mouse over each dot for observation site name and FMratio. 
 
-![This is a journal cover I designed](https://github.com/anniexu0116/Mapping_trial/blob/main/images/journal.jpg)
+* link to the plot: https://anniexu0116.github.io/Mapping_trial/
