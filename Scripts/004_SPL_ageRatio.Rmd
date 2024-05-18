@@ -1,0 +1,169 @@
+---
+title: "004_SPL_ageRatio"
+date: "2024-05-08"
+output: html_document
+---
+
+Recodes age, calculates avg age group by neighborhood and location_id, and maps the avg age group
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Load required packages
+```{r}
+rm(list=ls())
+library(tidyverse)
+library(sf)
+library(here)
+```
+
+# Import data
+```{r}
+SPL_1823 <- read.csv(here("data","SPL_1823.csv"))
+SPL_1823_geo <- st_read(here("data", "SPL_1823_location.geojson")) # location_id shapefiles and lat/long coordinates
+SEA_map <- st_read(here("data/raw","04_SPL_Seattle_Map.geojson")) # base SEA neighborhood map
+```
+
+# Recode the age column 
+```{r}
+SPL_1823 <- SPL_1823 %>%
+  mutate(
+    age=recode(staying_age,
+                        "0-4"   = 1,
+                        "5-14"  = 2,
+                        "15-24" = 3,
+                        "25-44" = 4,
+                        "45-64" = 5,
+                        "65+"   = 6))
+
+# SPL_1823$age <- SPL_1823$age %>%
+#   factor(levels = c(1,2,3,4,5,6),
+#          labels = c("0-4", 
+#                     "5-14",
+#                     "15-24", 
+#                     "25-44",
+#                     "45-64", 
+#                     "65+"))
+
+table(SPL_1823$staying_age) # 142 blank cells
+table(SPL_1823$age)
+```
+
+# Calculate age average by neighborhood (S_HOOD)
+```{r}
+age_avg <- SPL_1823 %>%
+  group_by(S_HOOD, study_id) %>%
+  dplyr::summarise(mean_age = mean(age, na.rm = TRUE)) %>%
+  select(S_HOOD, study_id, mean_age)
+```
+
+# Calculate women/men ratio by observation site (location_id)
+```{r}
+age_avg_locid <- SPL_1823 %>%
+  group_by(location_id, study_id) %>%
+  dplyr::summarise(mean_age = mean(age, na.rm = TRUE)) %>%
+  select(location_id, study_id, mean_age)
+```
+
+# Create map by neighborhood - neighborhood fill corresponds to women/men ratio
+
+## 2018 map
+```{r}
+# Filter 2018 data ----
+age_avg_18 <- age_avg %>%
+  filter(study_id=="2018_Seattle_Citywide")
+
+# Join the city map with 2018 filtered data ----
+age_avg_18_geo <- left_join(SEA_map, age_avg_18, by = "S_HOOD")
+
+ggplot() +
+  geom_sf(data = age_avg_18_geo, aes(fill = mean_age)) +
+  # geom_text(data = FM_ratio_18_geo, aes(label = S_HOOD, x=longitude, y=latitude), size = 3, color = "black", check_overlap = TRUE)+ #Need to troubleshoot
+  scale_fill_gradient(name = "Age staying mean",
+                      low = "lightblue", high = "darkblue", na.value = "gray",
+                      guide = guide_colorbar(title.position = "top")) +
+  labs(title = "2018 Age Staying Mean by Seattle Neighborhood ") +
+  theme_minimal()+
+  theme(
+    plot.title = element_text(family = "Times New Roman", size = 16, face = "bold")
+  )
+
+# Save 2018 map as an PNG in the Visualization folder ----
+ggsave(filename = "2018_ageMean_map.png", path = here("Visualization"), bg="white", height = 7, width = 7)
+```
+
+## 2023 map
+```{r}
+# Filter 2023 data ----
+age_avg_23 <- age_avg %>%
+  filter(study_id=="2023_Seattle_Citywide")
+
+# Join the city map with 2023 filtered data ---
+age_avg_23_geo <- left_join(SEA_map, age_avg_23, by = "S_HOOD")
+
+ggplot() +
+  geom_sf(data = age_avg_23_geo, aes(fill = mean_age)) +
+  # geom_text(data = FM_ratio_23_geo, aes(label = S_HOOD, x=longitude, y=latitude), size = 3, color = "black", check_overlap = TRUE)+ #Need to troubleshoot
+  scale_fill_gradient(name = "Age staying mean",
+                      low = "lightblue", high = "darkblue", na.value = "gray",
+                      guide = guide_colorbar(title.position = "top")) +
+  labs(title = "2023 Age Staying Mean by Seattle Neighborhood ") +
+  theme_minimal()+
+  theme(
+    plot.title = element_text(family = "Times New Roman", size = 16, face = "bold")
+  )
+
+# Save 2023 map as an PNG in the Visualization folder ----
+ggsave(filename = "2023_ageMean_map.png", path = here("Visualization"), bg="white", width = 7, height = 7)
+```
+
+# Create map by dots (dots represent block face; color represents proportion)
+
+## 2018 map
+```{r}
+# Filter 2018 data ----
+age_avg_18_locid <- age_avg_locid %>% 
+  filter(study_id == "2018_Seattle_Citywide")
+
+# Join location_id coordinates with 2018 filtered data ----
+age_avg_18_locid_geo <- left_join(age_avg_18_locid, SPL_1823_geo, by = "location_id")
+
+ggplot() +
+  geom_sf(data = SEA_map) + #plot base SEA neighborhood map
+  geom_point(data=age_avg_18_locid_geo, aes(x=longitude, y=latitude, color = mean_age),shape=20, size=4) + # add points
+  #scale_size_continuous(range=c(1,6))+
+  scale_color_continuous(name="Age Mean",
+                        low = "lightblue", high = "darkblue") +
+  labs(title = "2018 Age Staying Mean by Observation Site") +
+  labs(fill="Observation Sites")
+
+# Save Map_2018_dot in the Visualization folder ----
+ggsave(filename = "2018_ageMean_map_dot.png", path = here("Visualization"), bg="white", width = 7, height = 7)
+```
+
+## 2023 map
+```{r}
+# Filter 2023 data ----
+age_avg_23_locid <- age_avg_locid %>% 
+  filter(study_id == "2023_Seattle_Citywide")
+
+# Join location_id coordinates with 2023 filtered data ----
+age_avg_23_locid_geo <- left_join(age_avg_23_locid, SPL_1823_geo, by = "location_id")
+
+ggplot() +
+  geom_sf(data = SEA_map) + #plot base SEA neighborhood map
+  geom_point(data=age_avg_23_locid_geo, aes(x=longitude, y=latitude, color = mean_age),shape=20, size=3) + # add points
+  #scale_size_continuous(range=c(1,6))+
+  scale_color_continuous(name="Age Mean",
+                        low = "lightblue", high = "darkblue")+
+  labs(title = "2023 Age Staying Mean by Observation Site") +
+  labs(fill="Observation Sites")
+
+
+# Save Map_2023_dot in the Visualization folder ----
+ggsave(filename = "2023_ageMean_map_dot.png", path = here("Visualization"), bg="white", width = 7, height = 7)
+
+```
+
+

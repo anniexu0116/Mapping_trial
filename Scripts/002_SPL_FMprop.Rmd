@@ -1,0 +1,241 @@
+---
+title: "005_SPL_FMpropr"
+output: html_document
+date: "2024-05-17"
+---
+
+Recodes gender, calculates proportion of female and male by location_id, and maps the dot map
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Load required packages
+```{r}
+rm(list=ls())
+library(tidyverse)
+library(psych)
+library(dplyr)
+library(sf)
+library(here)
+library(plotly)
+library(htmlwidgets)
+```
+
+# Import data
+```{r}
+SPL_1823 <- read.csv(here("data","SPL_1823.csv"))
+SPL_1823_geo <- st_read(here("data", "SPL_1823_location.geojson")) # location_id shapefiles and lat/long coordinates
+SEA_map <- st_read(here("data/raw","04_SPL_Seattle_Map.geojson")) # base SEA neighborhood map
+```
+
+# Recode the gender column 
+```{r}
+SPL_1823 <- SPL_1823 %>%
+  mutate(
+    gender=recode(staying_gender,
+                        "Female"="Fem",
+                        "Feminine presenting"="Fem",
+                        "Gender-non-conforming presenting" = "non_conforming",
+                        "Male"="Masc",
+                        "Masculine presenting"="Masc",
+                        "Other_Unsure"="Unsure",
+                        "Unsure"="Unsure"))
+
+# table(SPL_1823$gender)
+# table(SPL_1823$staying_gender)
+```
+
+# Calculate proportion women or men by neighborhood (S_HOOD)
+```{r}
+# instead of doing a f:m ratio, calculate the proportion of total observed that are women/men
+FM_prop_shood <- SPL_1823 %>%
+  group_by(S_HOOD, gender, study_id) %>%
+  dplyr::summarise(count= n()) %>%
+  pivot_wider(
+    id_cols = c(S_HOOD, study_id),
+    names_from = gender,
+    values_from = count,
+    names_prefix = "Observed_"
+  ) %>%
+  rowwise() %>% #this is to make sure the total is calculated correctly in the next line
+  dplyr::mutate(total = sum(c_across(Observed_Fem:Observed_non_conforming), na.rm=T)) %>% #calculate total observed, including observations where no one was observed!
+  mutate_at(vars(Observed_Fem, Observed_Masc, Observed_non_conforming, Observed_Unsure), ~replace_na(., 0)) %>% #replace NAs with 0s so that the calculated proportions return 0 and not NA
+  mutate(F_prop = Observed_Fem/total,
+         M_prop = Observed_Masc/total) %>%
+  select(S_HOOD, study_id, F_prop, M_prop, Observed_Fem, Observed_Masc, total)
+
+FM_prop_shood
+# note that the total is the sum of fem, masc, non_conforming, unsure, and empty observations (i.e., empty locations where no one was staying at all). this is why e.g., Bitter Lake in 2018 has 1 fem, 0 masc, and 16 total observations
+```
+
+# Calculate proportion women or men by observation site (location_id)
+
+```{r}
+# instead of doing a f:m ratio, calculate the proportion of total observed that are women/men
+FM_prop_locid <- SPL_1823 %>%
+  group_by(location_id, gender, study_id) %>%
+  dplyr::summarise(count= n()) %>%
+  pivot_wider(
+    id_cols = c(location_id, study_id),
+    names_from = gender,
+    values_from = count,
+    names_prefix = "Observed_"
+  ) %>%
+  rowwise() %>% #this is to make sure the total is calculated correctly in the next line
+  dplyr::mutate(total = sum(c_across(Observed_Fem:Observed_non_conforming), na.rm=T)) %>% #calculate total observed
+  mutate_at(vars(Observed_Fem, Observed_Masc, Observed_non_conforming, Observed_Unsure), ~replace_na(., 0)) %>% #replace NAs with 0s so that the calculated proportions return 0 and not NA
+  mutate(F_prop = Observed_Fem/total,
+         M_prop = Observed_Masc/total) %>%
+  select(location_id, study_id, F_prop, M_prop, Observed_Fem, Observed_Masc, total)
+
+# append S_HOOD back
+FM_prop_locid <- SPL_1823 %>%
+  select(location_id, S_HOOD) %>%
+  distinct() %>%
+  right_join(FM_prop_locid, by = "location_id")
+
+FM_prop_locid
+# again, note that the total is the sum of fem, masc, non_conforming, unsure, and empty observations (i.e., empty locations where no one was staying at all). this is why e.g., BLV1 in 2018 has 1 fem, 0 masc, and 8 total observations
+
+```
+
+# Create map by dots - Annie to create template
+
+## 2018 static map (dots represent each block face; color represent percentage of fem or masc)
+```{r}
+# Filter 2018 data ----
+FM_prop_18_locid <- FM_prop_locid %>% filter(study_id == "2018_Seattle_Citywide")
+
+# Join location_id coordinates with 2018 filtered data ----
+FM_prop_18_locid_geo <- left_join(FM_prop_18_locid, SPL_1823_geo, by = "location_id")
+
+# Static plot for Proportion of Fem-presenting----
+ggplot() +
+  geom_sf(data = SEA_map) + #plot base SEA neighborhood map
+  geom_point(data=FM_prop_18_locid_geo, aes(x=longitude, y=latitude, color = F_prop, alpha = 0.95),shape=20, size=5) + # add points
+  scale_color_gradientn(name="%: Fem-presenting/Total", colours = c("mistyrose","violetred3"), #Specify the colors for each end 
+                       breaks = c(0, 0.2, 0.4, 0.6, max(FM_prop_18_locid_geo$F_prop))) + #Create the breaks
+  scale_alpha_continuous(guide = "none")+
+  labs(title = "2018 Percentage of Feminine-Presenting Individuals Staying by Observation Site") +
+  labs(fill="Observation Sites")
+
+# Save Map_2018_dot in the Visualization folder ----
+ggsave(filename = "2018_F_prop_map_dot.png", path = here("Visualization"), bg="white", width = 7, height = 7)
+
+
+# Static plot for Proportion of Masc-presenting----
+ggplot() +
+  geom_sf(data = SEA_map) + #plot base SEA neighborhood map
+  geom_point(data=FM_prop_18_locid_geo, aes(x=longitude, y=latitude, color = M_prop, alpha = 0.95), shape=20, size=5) + # add points
+  scale_color_gradientn(name="%: Masc-presenting/Total", colours = c("slategray1","royalblue4"), #Specify the colors for each end 
+                       breaks = c(0, 0.2, 0.4, 0.6, 0.8,  max(FM_prop_18_locid_geo$FM_ratio))) + #Create the breaks
+  scale_alpha_continuous(guide = "none")+
+  labs(title = "2018 Percentage of Masculine-Presenting Individuals Staying by Observation Site") +
+  labs(fill="Observation Sites")
+
+# Save Map_2018_dot in the Visualization folder ----
+ggsave(filename = "2018_M_prop_map_dot.png", path = here("Visualization"), bg="white", width = 7, height = 7)
+
+
+```
+
+## 2023 static map (dots represent each block face; color represent percentage of fem or masc)
+```{r}
+# Filter 2023 data ----
+FM_prop_23_locid <- FM_prop_locid %>% filter(study_id == "2023_Seattle_Citywide")
+
+# Join location_id coordinates with 2023 filtered data ----
+FM_prop_23_locid_geo <- left_join(FM_prop_23_locid, SPL_1823_geo, by = "location_id")
+
+ggplot() +
+  geom_sf(data = SEA_map) + #plot base SEA neighborhood map
+  geom_point(data=FM_prop_23_locid_geo, aes(x=longitude, y=latitude, color = F_prop, alpha = 0.9), shape=20, size=5) + # add point
+  scale_color_gradientn(name="%: Fem-presenting/Total", colours = c("mistyrose","violetred3"), #Specify the colors for each end 
+                       breaks = c(0, 0.2, 0.4, 0.6, 0.8)) + #Create the breaks
+  scale_alpha_continuous(guide = "none")+
+  labs(title = "2023 Percentage of Feminine-Presenting Individuals Staying by Observation Site") +
+  labs(fill="Observation Sites")
+
+
+# Save Map_2023_dot in the Visualization folder ----
+ggsave(filename = "2023_F_prop_map_dot.png", path = here("Visualization"), bg="white", width = 7, height = 7)
+
+
+
+# Static plot for Proportion of Masc-presenting----
+ggplot() +
+  geom_sf(data = SEA_map) + #plot base SEA neighborhood map
+  geom_point(data=FM_prop_23_locid_geo, aes(x=longitude, y=latitude, color = M_prop, alpha = 0.95), shape=20, size=5) + # add points
+  scale_color_gradientn(name="%: Masc-presenting/Total", colours = c("slategray1","royalblue4"), #Specify the colors for each end 
+                       breaks = c(0, 0.2, 0.4, 0.6, 0.8, 1.0)) + #Create the breaks
+  scale_alpha_continuous(guide = "none")+
+  labs(title = "2023 Percentage of Masculine-Presenting Individuals Staying by Observation Site") +
+  labs(fill="Observation Sites")
+
+# Save Map_2018_dot in the Visualization folder ----
+ggsave(filename = "2023_M_prop_map_dot.png", path = here("Visualization"), bg="white", width = 7, height = 7)
+
+```
+
+# 2018 Interactive Plots 
+## I am only showing Fem-presenting, but when you hover over, the text box should show M_prop, and also the total number of observations
+```{r}
+# Fem-presenting
+p <- ggplot() +
+  geom_sf(data = SEA_map) + #plot base SEA neighborhood map
+  geom_point(data=FM_prop_18_locid_geo, aes(x=longitude, y=latitude, color = F_prop, 
+text = paste("Block Face: ", location_id, 
+             "<br>Percentage of Fem_presenting: ", round(F_prop,2), 
+             "<br>Percentage of Masc_presenting: ", round(M_prop,2),
+             "<br>Total observation: ", total), 
+                                            alpha = 0.95),shape=20, size=4) + # add points
+  scale_color_gradientn(name="%: Fem-presenting/Total", colours = c("mistyrose","violetred3"), #Specify the colors for each end 
+                       breaks = c(0, 0.2, 0.4, 0.6, 0.8)) + #Create the breaks
+  scale_alpha_continuous(guide = "none")+
+  labs(title = "2018 Percentage of Feminine-Presenting Individuals Staying by Observation Site") +
+  labs(fill="Observation Sites")
+
+p <- ggplotly(, tooltip = "text")
+
+saveWidget(p, here("Interactive", "2018_Gender_interactive.html"), selfcontained = FALSE, libdir = "libs")
+
+```
+
+
+# 2023 Interactive Plots 
+## I am only showing Fem-presenting, but when you hover over, the text box should show M_prop, and also the total number of observations
+```{r}
+# Fem-presenting
+p <- ggplot() +
+  geom_sf(data = SEA_map) + #plot base SEA neighborhood map
+  geom_point(data=FM_prop_23_locid_geo, aes(x=longitude, y=latitude, color = F_prop, 
+text = paste("Block Face: ", location_id, 
+             "<br>Percentage of Fem_presenting: ", round(F_prop,2), 
+             "<br>Percentage of Masc_presenting: ", round(M_prop,2),
+             "<br>Total observation: ", total), 
+                                            alpha = 0.95),shape=20, size=4) + # add points
+  scale_color_gradientn(name="%: Fem-presenting/Total", colours = c("mistyrose","violetred3"), #Specify the colors for each end 
+                       breaks = c(0, 0.2, 0.4, 0.6, 0.8)) + #Create the breaks
+  scale_alpha_continuous(guide = "none")+
+  labs(title = "2023 Percentage of Feminine-Presenting Individuals Staying by Observation Site") +
+  labs(fill="Observation Sites")
+
+p <- ggplotly(, tooltip = "text")
+
+saveWidget(p, here("Interactive", "2023_Gender_interactive.html"), selfcontained = FALSE, libdir = "libs")
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+

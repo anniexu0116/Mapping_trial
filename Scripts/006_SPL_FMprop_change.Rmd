@@ -1,0 +1,206 @@
+---
+title: "006_SPL_FMprop_change"
+output: html_document
+date: "2024-05-17"
+---
+
+Plot change in FM proportions between 2018 and 2023
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Load required packages
+```{r}
+rm(list=ls())
+library(tidyverse)
+library(psych)
+library(dplyr)
+library(sf)
+library(here)
+library(leaflet)
+```
+
+# Import data
+```{r}
+SPL_1823 <- read.csv(here("data","SPL_1823.csv"))
+SPL_1823_geo <- st_read(here("data", "SPL_1823_location.geojson")) # location_id shapefiles and lat/long coordinates
+SEA_map <- st_read(here("data/raw","04_SPL_Seattle_Map.geojson")) # base SEA neighborhood map
+```
+
+# Recode the gender column 
+```{r}
+SPL_1823 <- SPL_1823 %>%
+  mutate(
+    gender=recode(staying_gender,
+                        "Female"="Fem",
+                        "Feminine presenting"="Fem",
+                        "Gender-non-conforming presenting" = "non_conforming",
+                        "Male"="Masc",
+                        "Masculine presenting"="Masc",
+                        "Other_Unsure"="Unsure",
+                        "Unsure"="Unsure"))
+
+# table(SPL_1823$gender)
+# table(SPL_1823$staying_gender)
+```
+
+# Calculate proportion women or men by neighborhood (S_HOOD)
+```{r}
+# instead of doing a f:m ratio, calculate the proportion of total observed that are women/men
+FM_prop_shood <- SPL_1823 %>%
+  group_by(S_HOOD, gender, study_id) %>%
+  dplyr::summarise(count= n()) %>%
+  pivot_wider(
+    id_cols = c(S_HOOD, study_id),
+    names_from = gender,
+    values_from = count,
+    names_prefix = "Observed_"
+  ) %>%
+  rowwise() %>% #this is to make sure the total is calculated correctly in the next line
+  dplyr::mutate(total = sum(c_across(Observed_Fem:Observed_non_conforming), na.rm=T)) %>% #calculate total observed, including observations where no one was observed!
+  mutate_at(vars(Observed_Fem, Observed_Masc, Observed_non_conforming, Observed_Unsure), ~replace_na(., 0)) %>% #replace NAs with 0s so that the calculated proportions return 0 and not NA
+  mutate(F_prop = Observed_Fem/total,
+         M_prop = Observed_Masc/total) %>%
+  select(S_HOOD, study_id, F_prop, M_prop, Observed_Fem, Observed_Masc, total)
+
+FM_prop_shood
+# note that the total is the sum of fem, masc, non_conforming, unsure, and empty observations (i.e., empty locations where no one was staying at all). this is why e.g., Bitter Lake in 2018 has 1 fem, 0 masc, and 16 total observations
+```
+
+# Calculate proportion women or men by observation site (location_id)
+
+```{r}
+# instead of doing a f:m ratio, calculate the proportion of total observed that are women/men
+FM_prop_locid <- SPL_1823 %>%
+  group_by(location_id, gender, study_id) %>%
+  dplyr::summarise(count= n()) %>%
+  pivot_wider(
+    id_cols = c(location_id, study_id),
+    names_from = gender,
+    values_from = count,
+    names_prefix = "Observed_"
+  ) %>%
+  rowwise() %>% #this is to make sure the total is calculated correctly in the next line
+  dplyr::mutate(total = sum(c_across(Observed_Fem:Observed_non_conforming), na.rm=T)) %>% #calculate total observed
+  mutate_at(vars(Observed_Fem, Observed_Masc, Observed_non_conforming, Observed_Unsure), ~replace_na(., 0)) %>% #replace NAs with 0s so that the calculated proportions return 0 and not NA
+  mutate(F_prop = Observed_Fem/total,
+         M_prop = Observed_Masc/total) %>%
+  select(location_id, study_id, F_prop, M_prop, Observed_Fem, Observed_Masc, total)
+
+# append S_HOOD back
+FM_prop_locid <- SPL_1823 %>%
+  select(location_id, S_HOOD) %>%
+  distinct() %>%
+  right_join(FM_prop_locid, by = "location_id")
+
+FM_prop_locid
+# again, note that the total is the sum of fem, masc, non_conforming, unsure, and empty observations (i.e., empty locations where no one was staying at all). this is why e.g., BLV1 in 2018 has 1 fem, 0 masc, and 8 total observations
+
+```
+
+# 2018 vs 2023 comparisons
+
+## Descriptive Change
+```{r}
+# raw deltas (2023 - 2018) ------------------------------
+
+# prop women and women by location_id
+FM_prop_locid_change <- FM_prop_locid %>%
+  pivot_wider(id_cols = c(location_id, S_HOOD), names_from = study_id, values_from = c(F_prop, M_prop)) %>%
+  rename_with(~str_remove(., '_Seattle_Citywide')) %>% # drop the suffix
+  mutate(F_prop_2318 = F_prop_2023 - F_prop_2018,
+         M_prop_2318 = M_prop_2023 - M_prop_2018)
+
+FM_prop_locid_change %>% arrange(location_id)
+
+# prop women and women by s_hoods
+FM_prop_shood_change <- FM_prop_shood %>%
+  pivot_wider(id_cols = S_HOOD, names_from = study_id, values_from = c(F_prop, M_prop)) %>%
+  rename_with(~str_remove(., '_Seattle_Citywide')) %>% # drop the suffix
+  mutate(F_prop_2318 = F_prop_2023 - F_prop_2018,
+         M_prop_2318 = M_prop_2023 - M_prop_2018)
+
+FM_prop_shood_change
+```
+
+## Random Effects Model
+```{r}
+# random effects model ------------------------------------
+
+## observations aggregated at location_id level
+r1_fprop <- lmer(F_prop ~ study_id + (1|location_id), data = FM_prop_locid)
+summary(r1_fprop)
+
+r1_mprop <- lmer(M_prop ~ study_id + (1|location_id), data = FM_prop_locid)
+summary(r1_mprop)
+
+## observations aggregated at S_HOOD level
+r2_fprop <-  lmer(F_prop ~ study_id + (1|S_HOOD), data = FM_prop_shood)
+summary(r2_fprop)
+
+r2_mprop <- lmer(M_prop ~ study_id + (1|S_HOOD), data = FM_prop_shood)
+summary(r2_mprop)
+```
+
+## Correlation
+
+```{r}
+FM_prop_locid_change %>%
+  filter(!is.na(F_prop_2318)) %>%
+  corr.test(x = F_prop_2018, y = F_prop_2023)
+```
+
+
+## Plots
+
+```{r}
+# plot location_id
+
+## fem proportion
+FM_prop_locid_change %>%
+  filter(!is.na(F_prop_2318)) %>%
+  ggplot(., aes(x = F_prop_2018, y = F_prop_2023, colour = S_HOOD)) +
+  geom_point() +
+  geom_abline(slope = 1, linetype="dotted") +
+  coord_cartesian(xlim = c(0, 1), ylim = c(0, 1)) +
+  guides(colour = guide_legend(ncol = 2))
+
+## masc proportion
+FM_prop_locid_change %>%
+  filter(!is.na(M_prop_2318)) %>%
+  ggplot(., aes(x = M_prop_2018, y = M_prop_2023, colour = S_HOOD)) +
+  geom_point() +
+  geom_abline(slope = 1, linetype="dotted") +
+  coord_cartesian(xlim = c(0, 1), ylim = c(0, 1)) +
+  guides(colour = guide_legend(ncol = 2))
+
+# plot s_hoods
+
+## fem proportion
+FM_prop_shood_change %>%
+  filter(!is.na(F_prop_2318)) %>%
+  ggplot(., aes(x = F_prop_2018, y = F_prop_2023, colour = S_HOOD)) +
+  geom_point() +
+  geom_abline(slope = 1, linetype="dotted") +
+  coord_cartesian(xlim = c(0, 1), ylim = c(0, 1)) +
+  guides(colour = guide_legend(ncol = 2))
+
+### note - why are some dots representing the same locations moving between the locid and shood plots? e.g., rainier beach - RAI2 has 2018 and 2023 data, but RAI1 only has 2023 data. the locid plot is plotting just RAI2, but shood plot averages across years for each shood so it's plotting RAI2 2018 and 2023 is the average between RAI1 and RAI2.
+
+## masc proportion
+FM_prop_shood_change %>%
+  filter(!is.na(M_prop_2318)) %>%
+  ggplot(., aes(x = M_prop_2018, y = M_prop_2023, colour = S_HOOD)) +
+  geom_point() +
+  geom_abline(slope = 1, linetype="dotted") +
+  coord_cartesian(xlim = c(0, 1), ylim = c(0, 1)) +
+  guides(colour = guide_legend(ncol = 2))
+```
+
+
+
+
+
+
+

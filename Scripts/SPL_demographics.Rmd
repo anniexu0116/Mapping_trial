@@ -1,0 +1,92 @@
+---
+title: "SPL_demographics"
+author: "Rebecca Schachtman"
+date: "4/29/2024"
+output: html_document
+---
+# Load libraries
+```{r}
+library(tidyverse)
+library(here)
+```
+
+# Load in data files
+```{r}
+#Census data from: https://data-seattlecitygis.opendata.arcgis.com/datasets/SeattleCityGIS::selected-demographic-and-housing-estimates-dp05/about
+
+#Census data from Seattle from 2010-2022
+demo_data <- read.csv(here("data/Raw","05_SPL_Demographics.csv")) 
+
+#Clean SPL 2018 and 2023 data
+SPL_data <- read.csv(here("data", "SPL_1823.csv")) 
+```
+
+# Updating necessary neighborhood names
+```{r}
+demo_data <- demo_data %>% mutate(neighborhood = recode(Community.Reporting.Area.Name,
+                                 "Alki/Admiral" = "Alki",
+                                 "Downtown Commercial Core" = "Commercial Core",
+                                 "West Seattle Junction/Genesee Hill" = "West Seattle Junction",
+                                 "Greenwood/Phinney Ridge" = "Greenwood - Phinney Ridge",
+                                 "First Hill" = "First Hill / 12th Ave",
+                                 "Highland Park" = "Westwood - Highland Park",
+                                 "Roxhill/Westwood" = "Westwood - Highland Park",
+                                 "Miller Park" = "Madison Miller",
+                                 "Mt. Baker/North Rainier" = "Mt Baker",
+                                 "North Beacon Hill/Jefferson Park" = "North Beacon Hill",
+                                 "Northgate/Maple Leaf" = "Northgate",
+                                 "Olympic Hills/Victory Heights" = "Lake City",
+                                 "Wedgwood/View Ridge" = "Wedgwood",
+                                 "Queen Anne" = "Upper Queen Anne")) #Recoding QA into UQA because census dataset does not specify
+
+## Note that need to update original cleaning code to fix= First Hill / 12th Ave (not broadview) and 23rd and jackson (not pinehurst)
+
+```
+**Note:**  
+These "Community.Reporting.Area.Names" values from the census data will be dropped in the merge these because there is not a suitable neighborhood to recode them into:  
+Arbor Heights, Cascade/Eastlake (closest is SLU), Cedar Park/Meadowbrook, Duwamish/SODO, Central Area/Squire Park, Fauntleroy/Seaview, Green Lake, Haller Ridge, High Point, Interbay, Judkins Park, Laurelhurst/Sand Point, Licton Springs, Madrona/Leschi, Montlake/Portage Bay, North Beach/Blue Ridge, North Capitol Hill, North Delridge, Riverview, South Beacon Hill/NewHolly, Sunset Hills/Loyal Heights, Broadview/Bitter Lake, Pioneer Square/ID, Ravenna/Bryant
+
+# Merging demographic data into SPL data
+```{r}
+# 2018 data
+##Creating a 2018 specific staying dataframe
+SPL2018 <- SPL_data %>% filter(study_id == "2018_Seattle_Citywide") %>%
+  rename("neighborhood" = "location_neighborhood")
+table(SPL2018$neighborhood)
+##Filtering census data to 2020 only (closest year to 2018 that is available)
+demo2018 <- demo_data %>% filter(ACS.Vintage == "5Y20")
+##Summing up total counts for each demo category per neighborhood
+summarised_data <- demo2018 %>% group_by(neighborhood) %>% summarise(across(Total.population:Total.Housing.Units, sum))
+demo2018_avg <- demo2018 %>% left_join(summarised_data, by = "neighborhood")
+
+##Merging both dataframes by the neighborhood column
+merged2018 <- merge(SPL2018, demo2018_avg, by = "neighborhood", all = FALSE)
+##Filtering so that there is just one row per unique_staying_id
+merged2018 <- distinct(merged2018, unique_staying_id, .keep_all = TRUE)
+
+# 2023 data
+##Creating a 2023 specific staying dataframe
+SPL2023 <- SPL_data %>% filter(study_id == "2023_Seattle_Citywide") %>%
+  rename("neighborhood" = "location_neighborhood")
+##Filtering census data to 2022 only (closest year to 2023 that is available)
+demo2023 <- demo_data %>% filter(ACS.Vintage == "5Y22")
+##Summing up total counts for each demo category per neighborhood
+summarised_data <- demo2023 %>% group_by(neighborhood) %>% summarise(across(Total.population:Total.Housing.Units, sum))
+demo2023_avg <- demo2023 %>% left_join(summarised_data, by = "neighborhood")
+##Merging both dataframes by the neighborhood column
+merged2023 <- merge(SPL2023, demo2023_avg, by = "neighborhood", all = FALSE)
+##Filtering so that there is just one row per unique_staying_id
+merged2023 <- distinct(merged2023, unique_staying_id, .keep_all = TRUE)
+
+# Creating one big dataframe for 2018 and 2023 data
+SPL_1823_demographics <- rbind(merged2018, merged2023)
+##Cleaning it up
+SPL_1823_demographics <- SPL_1823_demographics %>% dplyr::select(neighborhood, unique_staying_id:ACS.Vintage)
+```
+
+
+```{r}
+##Saving it
+write.csv(SPL_1823_demographics, here("data", "SPL_1823_demographics2.csv"))
+```
+

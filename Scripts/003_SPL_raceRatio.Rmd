@@ -1,0 +1,135 @@
+---
+title: "003_SPL_RaceRatio"
+date: "2024-05-08"
+output: html_document
+---
+
+Recodes race, calculates URM:White ratio by neighborhood and location_id, and maps the URM:White ratio
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Load required packages
+```{r}
+rm(list=ls())
+library(tidyverse)
+library(sf)
+library(here)
+```
+
+# Import data
+```{r}
+SPL_1823 <- read.csv(here("data","SPL_1823.csv"))
+SPL_1823_geo <- st_read(here("data", "SPL_1823_location.geojson")) # location_id shapefiles and lat/long coordinates
+SEA_map <- st_read(here("data/raw","04_SPL_Seattle_Map.geojson")) # base SEA neighborhood map
+```
+
+# Recode the race column 
+```{r}
+SPL_1823 <- SPL_1823 %>%
+  mutate(
+    race=recode(staying_race_ethnicity,
+                        "A" = "URM", # Asian
+                        "B" = "URM", # Black or African American
+                        "L" = "URM", # Latino/a or Hispanic
+                        "M" = "URM", # Multiple, assumed to be multiracial
+                        "N" = "URM", # Native American or Alaskan Native
+                        "P" = "URM", # Pacific Island or Native Hawaiian
+                        "U" = "Unsure", # Unsure
+                        "W" = "White")) # White
+
+table(SPL_1823$race)
+table(SPL_1823$staying_race_ethnicity)
+
+# Realized there were many blanks, so wanted to see where these were coming from
+
+table(SPL_1823$staying_race_ethnicity[SPL_1823$study_id == "2023_Seattle_Citywide"])
+
+# Confirmed that 2023 did not collect race data, so only have race data for 2018
+
+SPL_18 <- SPL_1823 %>%
+  filter(SPL_1823$study_id == "2018_Seattle_Citywide")
+
+# Run tables again
+table(SPL_18$race)
+table(SPL_18$staying_race_ethnicity)
+
+# Only 142 blanks now, which seems more normal
+
+```
+
+# Calculate URM/White ratio by neighborhood (S_HOOD)
+```{r}
+race_ratio <- SPL_18 %>%
+  group_by(S_HOOD, race) %>%
+  dplyr::summarise(count= n()) %>%
+  pivot_wider(
+    id_cols = S_HOOD,
+    names_from = race,
+    values_from = count,
+    names_prefix = "Observed_"
+  ) %>%
+  mutate(race_ratio = round(Observed_URM/Observed_White, 2)) %>%
+  select(S_HOOD, race_ratio)
+```
+
+# Calculate women/men ratio by observation site (location_id)
+```{r}
+race_ratio_locid <- SPL_18 %>%
+  group_by(location_id, race) %>%
+  dplyr::summarise(count = n()) %>%
+  pivot_wider(
+    id_cols = location_id,
+    names_from = race,
+    values_from = count,
+    names_prefix = "Observed_"
+  ) %>%
+  mutate(race_ratio = round(Observed_URM/Observed_White, 2)) %>%
+  select(location_id, race_ratio)
+```
+
+# Create map by neighborhood - neighborhood fill corresponds to URM/White ratio
+
+## 2018 map
+```{r}
+# Join the city map with 2018 filtered data ----
+race_ratio_18_geo <- left_join(SEA_map, race_ratio, by = "S_HOOD")
+
+ggplot() +
+  geom_sf(data = race_ratio_18_geo, aes(fill = race_ratio)) +
+  # geom_text(data = FM_ratio_18_geo, aes(label = S_HOOD, x=longitude, y=latitude), size = 3, color = "black", check_overlap = TRUE)+ #Need to troubleshoot
+  scale_fill_gradient(name = "URM-to-White staying ratio",
+                      low = "lightblue", high = "darkblue", na.value = "gray",
+                      guide = guide_colorbar(title.position = "top")) +
+  labs(title = "2018 URM-to-White Staying Ratio by Seattle Neighborhood ") +
+  theme_minimal()+
+  theme(
+    plot.title = element_text(family = "Times New Roman", size = 16, face = "bold")
+  )
+
+# Save 2018 map as an PNG in the Visualization folder ----
+#ggsave(filename = "2018_raceRatio_map.png", path = here("Visualization"), bg="white", height = 7, width = 7)
+```
+
+# Create map by dots (dots represent block face; color represents proportion)
+
+## 2018 map
+```{r}
+# Join location_id coordinates with 2018 filtered data ----
+race_ratio_18_locid_geo <- left_join(race_ratio_locid, SPL_1823_geo, by = "location_id")
+
+ggplot() +
+  geom_sf(data = SEA_map) + #plot base SEA neighborhood map
+  geom_point(data=race_ratio_18_locid_geo, aes(x=longitude, y=latitude, color = race_ratio),shape=20, size=4) + # add points
+  #scale_size_continuous(range=c(1,6))+
+  scale_color_continuous(name="URM to White Ratio",
+                        low = "lightblue", high = "darkblue") +
+  labs(title = "2018 URM-to-White Staying Ratio by Observation Site") +
+  labs(fill="Observation Sites")
+
+# Save Map_2018_dot in the Visualization folder ----
+ggsave(filename = "2018_raceRatio_map_dot.png", path = here("Visualization"), bg="white", width = 7, height = 7)
+```
+
+

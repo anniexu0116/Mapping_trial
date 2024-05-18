@@ -23,13 +23,15 @@ library(dplyr)
 library(sf)
 library(here)
 library(leaflet)
+
+set_here(path='..')
 ```
 
 # Import all datasets
 ```{r}
-SPL <- read.csv(here("data/raw","03_SPL_Staying.csv")) # main dataset with SPL staying observations
-SPL_sites <- read.csv(here("data/raw","02_SPL_location.csv")) # SPL location_id info
-geo_SPL_locationids <- st_read(here("data/raw", "01_SPL_Geography.geojson")) # shapefile data with location_id polygons
+SPL <- read.csv(here("Data/Raw","03_SPL_Staying.csv")) # main dataset with SPL staying observations
+SPL_sites <- read.csv(here("Data/Raw","02_SPL_location.csv")) # SPL location_id info
+geo_SPL_locationids <- st_read(here("Data/Raw", "01_SPL_Geography.geojson")) # shapefile data with location_id polygons
 ```
 
 # Subset dataset for 2018 and 2023 data
@@ -59,7 +61,7 @@ SPL_1823$location_neighborhood[which(SPL_1823$location_id == "FHT5")] <- "First 
 # Rename neighborhoods to match the names in the geospatial data (S_HOOD)
 SPL_1823 <- SPL_1823 %>%
   mutate(S_HOOD = recode(location_neighborhood,
-                          "23rd & Union - Jackson" = "Pinehurst",
+                          "23rd & Union - Jackson" = "Leschi", #Not a perfect match, but went with Leschi
                           "Capitol Hill" = "Broadway",
                           "Bitter Lake Village" = "Bitter Lake",
                           "Magnolia" = "Carleton Park",
@@ -70,7 +72,7 @@ SPL_1823 <- SPL_1823 %>%
                           "Othello" = "Columbia City",                
                           "Madison Miller" = "Stevens",
                           "Uptown" = "Lower Queen Anne",
-                          "First Hill / 12th Ave" = "Broadview",
+                          "First Hill / 12th Ave" = "First Hill",
                           "West Seattle Junction" = "Gatewood",
                           "Commercial Core" = "Central Business District",
                           "Mt Baker"= "Mount Baker",              
@@ -82,15 +84,16 @@ SPL_1823 <- SPL_1823 %>%
 # Subset geo data for 2018 and 2023 locations
 ```{r}
 # First check to see if we have shapefiles for all location_ids
-spl_18_locids <- unique(SPL_1823$location_id)
-geo_locids <- unique(geo_SPL_locationids$location_id)
-spl_18_locids[which(!spl_18_locids %in% geo_locids)] # missing shapefiles for these: BLT5, PIK5, BLV3, PIK6, HPT1, PIO21, PIO20, HPT2, CAP5, COM5, COM6, COM7, COM8, FHT5
+spl_locids <- unique(SPL_1823$location_id) #122
+geo_locids <- unique(geo_SPL_locationids$location_id) #127
+spl_locids[which(!spl_locids %in% geo_locids)] # missing shapefiles for these: BLT5, PIK5, BLV3, PIK6, HPT1, PIO21, PIO20, HPT2, CAP5, COM5, COM6, COM7, COM8, FHT5
+missingshapes_locids <- spl_locids[which(!spl_locids %in% geo_locids)]
 
 # Identify which study the missing shapefiles are from
-SPL_1823 %>% select(study_id, location_id) %>% filter(location_id %in% c("BLT5", "PIK5", "BLV3", "PIK6", "HPT1", "PIO21", "PIO20", "HPT2", "CAP5", "COM5", "COM6", "COM7", "COM8", "FHT5")) %>% table() # missing shapefiles are all from 2023 survey
+SPL_1823 %>% select(study_id, location_id) %>% filter(location_id %in% missingshapes_locids) %>% table() # missing shapefiles are all from 2023 survey
 
 # Filter geodata for just the location_ids in our 2018/2023 data
-geo_SPL_1823_locationids <- geo_SPL_locationids %>% filter(location_id %in% spl_18_locids) # should have 108 location_ids
+geo_SPL_1823_locationids <- geo_SPL_locationids %>% filter(location_id %in% spl_locids) # 108 location_ids that are shared between 18 and 23
 
 # Extract lat/long coordinates from centroids
 geo_SPL_1823_locationids <- geo_SPL_1823_locationids %>%
@@ -102,8 +105,32 @@ ggplot(geo_SPL_1823_locationids) +
   geom_sf()
 ```
 
+# Add lat/long coordinates for the 2023 location_ids without shapefiles
+```{r}
+# Get the lat/long coordinates from the main SPL dataset
+SPL_1823 %>%
+  select(location_id, latitude, longitude) %>%
+  filter(location_id %in% missingshapes_locids) %>%
+  distinct() # note that the coordinates for same location_id are all slightly different
+
+# just keep the lat/long from the first location_id, assuming all the coordinates are quite similar
+latlong_missingshapes_locids <- SPL_1823 %>%
+  select(location_id, latitude, longitude) %>%
+  filter(location_id %in% missingshapes_locids) %>%
+  distinct(location_id, .keep_all = TRUE)
+
+# merge with the other location_ids
+geo_SPL_1823_locationids <- merge(geo_SPL_1823_locationids, latlong_missingshapes_locids, all = TRUE)
+
+# test plot
+ggplot(geo_SPL_1823_locationids) +
+  geom_sf() +
+  geom_point(data = geo_SPL_1823_locationids, aes(x = longitude, y = latitude), shape = 20, size = 1)
+```
+
+
 # Export data
 ```{r}
-write.csv(SPL_1823, here("data", "SPL_1823.csv"))
-sf::st_write(geo_SPL_1823_locationids,here("data", "SPL_1823_location.geojson"))
+write.csv(SPL_1823, here("Data", "SPL_1823.csv"))
+sf::st_write(geo_SPL_1823_locationids,here("Data", "SPL_1823_location.geojson")) #delete the old file before running this line, otherwise it will say that this dataset already exists and won't override it
 ```
