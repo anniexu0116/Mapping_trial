@@ -238,6 +238,12 @@ p <- ggplot() +
 
 
 ggplotly(p, tooltip = "text")
+
+#Save the interactive plot for 2023
+p <- ggplotly(, tooltip = "text")
+
+#Save the interactive dot plot
+saveWidget(p, here("Interactive", "2023_map_interactive.html"), selfcontained = FALSE, libdir = "libs")
 ```
 
 
