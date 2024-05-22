@@ -4,18 +4,21 @@ date: "2024-05-08"
 output: html_document
 ---
 
-Recodes race, calculates URM:White ratio by neighborhood and location_id, and maps the URM:White ratio
+Recodes race, calculates racial/ethnic group proportions by location_id, and maps the proportions
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
 # Load required packages
-```{r}
+```{r, message = FALSE}
 rm(list=ls())
 library(tidyverse)
 library(sf)
 library(here)
+library(scales) # to edit decimal places shown in legend
+library(plotly)
+library(htmlwidgets)
 ```
 
 # Import data
@@ -35,7 +38,7 @@ SPL_1823 <- SPL_1823 %>%
                         "L" = "URM", # Latino/a or Hispanic
                         "M" = "URM", # Multiple, assumed to be multiracial
                         "N" = "URM", # Native American or Alaskan Native
-                        "P" = "URM", # Pacific Island or Native Hawaiian
+                        "P" = "URM", # Pacific Island or Native Hawaiian, no observations in dataset
                         "U" = "Unsure", # Unsure
                         "W" = "White")) # White
 
@@ -56,80 +59,210 @@ table(SPL_18$race)
 table(SPL_18$staying_race_ethnicity)
 
 # Only 142 blanks now, which seems more normal
-
 ```
 
-# Calculate URM/White ratio by neighborhood (S_HOOD)
+# Calculate race proportion by observation site (location_id), separate by racial group
 ```{r}
-race_ratio <- SPL_18 %>%
-  group_by(S_HOOD, race) %>%
-  dplyr::summarise(count= n()) %>%
-  pivot_wider(
-    id_cols = S_HOOD,
-    names_from = race,
-    values_from = count,
-    names_prefix = "Observed_"
-  ) %>%
-  mutate(race_ratio = round(Observed_URM/Observed_White, 2)) %>%
-  select(S_HOOD, race_ratio)
-```
-
-# Calculate women/men ratio by observation site (location_id)
-```{r}
-race_ratio_locid <- SPL_18 %>%
-  group_by(location_id, race) %>%
+race_prop_locid <- SPL_18 %>%
+  group_by(location_id, staying_race_ethnicity) %>%
   dplyr::summarise(count = n()) %>%
-  pivot_wider(
-    id_cols = location_id,
-    names_from = race,
-    values_from = count,
-    names_prefix = "Observed_"
-  ) %>%
-  mutate(race_ratio = round(Observed_URM/Observed_White, 2)) %>%
-  select(location_id, race_ratio)
+  pivot_wider(id_cols = location_id,
+              names_from = staying_race_ethnicity,
+              values_from = count,
+              names_prefix = "Observed_") %>%
+  replace(is.na(.), 0) %>%
+  rowwise() %>%
+  mutate(total_count = sum(c_across(starts_with("Observed_")))) %>%
+  ungroup() %>%
+  mutate(Asian_prop  = round(Observed_A/total_count, 2),
+         Black_prop  = round(Observed_B/total_count, 2),
+         Latinx_prop = round(Observed_L/total_count, 2),
+         Multi_prop  = round(Observed_M/total_count, 2),
+         NatAm_prop  = round(Observed_N/total_count, 2),
+         White_prop  = round(Observed_W/total_count, 2)) %>%
+  select(location_id, Asian_prop, Black_prop, Latinx_prop, Multi_prop, NatAm_prop, White_prop, total_count) # Adding the total count for the interactive plots
 ```
 
-# Create map by neighborhood - neighborhood fill corresponds to URM/White ratio
-
-## 2018 map
+# Join location_id coordinates with 2018 filtered data
 ```{r}
-# Join the city map with 2018 filtered data ----
-race_ratio_18_geo <- left_join(SEA_map, race_ratio, by = "S_HOOD")
-
-ggplot() +
-  geom_sf(data = race_ratio_18_geo, aes(fill = race_ratio)) +
-  # geom_text(data = FM_ratio_18_geo, aes(label = S_HOOD, x=longitude, y=latitude), size = 3, color = "black", check_overlap = TRUE)+ #Need to troubleshoot
-  scale_fill_gradient(name = "URM-to-White staying ratio",
-                      low = "lightblue", high = "darkblue", na.value = "gray",
-                      guide = guide_colorbar(title.position = "top")) +
-  labs(title = "2018 URM-to-White Staying Ratio by Seattle Neighborhood ") +
-  theme_minimal()+
-  theme(
-    plot.title = element_text(family = "Times New Roman", size = 16, face = "bold")
-  )
-
-# Save 2018 map as an PNG in the Visualization folder ----
-#ggsave(filename = "2018_raceRatio_map.png", path = here("Visualization"), bg="white", height = 7, width = 7)
+race_prop_18_locid_geo <- left_join(race_prop_locid, SPL_1823_geo, by = "location_id")
 ```
+
 
 # Create map by dots (dots represent block face; color represents proportion)
 
-## 2018 map
+## 2018 map - Asian
 ```{r}
-# Join location_id coordinates with 2018 filtered data ----
-race_ratio_18_locid_geo <- left_join(race_ratio_locid, SPL_1823_geo, by = "location_id")
-
 ggplot() +
   geom_sf(data = SEA_map) + #plot base SEA neighborhood map
-  geom_point(data=race_ratio_18_locid_geo, aes(x=longitude, y=latitude, color = race_ratio),shape=20, size=4) + # add points
-  #scale_size_continuous(range=c(1,6))+
-  scale_color_continuous(name="URM to White Ratio",
-                        low = "lightblue", high = "darkblue") +
-  labs(title = "2018 URM-to-White Staying Ratio by Observation Site") +
+  geom_point(data = race_prop_18_locid_geo, 
+             aes(x = longitude, y = latitude, color = Asian_prop),
+             shape = 20, 
+             size = 4, 
+             alpha = 0.85) +
+  scale_color_continuous(name="Asian Proportion",
+                         low = "lightblue", 
+                         high = "darkblue",
+                         limits = c(0,0.61),
+                         labels = label_number(accuracy = 0.01)) +
+  labs(title = "2018 Asian Staying Proportion by Observation Site") +
   labs(fill="Observation Sites")
 
 # Save Map_2018_dot in the Visualization folder ----
-ggsave(filename = "2018_raceRatio_map_dot.png", path = here("Visualization"), bg="white", width = 7, height = 7)
+ggsave(filename = "2018_raceRatio_Asian_map_dot.png", path = here("Visualization"), bg="white", width = 7, height = 7)
 ```
+
+
+## 2018 map - Black
+```{r}
+ggplot() +
+  geom_sf(data = SEA_map) + #plot base SEA neighborhood map
+  geom_point(data = race_prop_18_locid_geo, 
+             aes(x = longitude, y = latitude, color = Black_prop),
+             shape = 20, 
+             size = 4, 
+             alpha = 0.85) +
+  scale_color_continuous(name="Black Proportion",
+                         low = "lightblue", 
+                         high = "darkblue",
+                         labels = label_number(accuracy = 0.01)) +
+  labs(title = "2018 Black Staying Proportion by Observation Site") +
+  labs(fill="Observation Sites")
+
+# Save Map_2018_dot in the Visualization folder ----
+ggsave(filename = "2018_raceRatio_Black_map_dot.png", path = here("Visualization"), bg="white", width = 7, height = 7)
+```
+
+
+## 2018 map - Latinx
+```{r}
+ggplot() +
+  geom_sf(data = SEA_map) + #plot base SEA neighborhood map
+  geom_point(data = race_prop_18_locid_geo, 
+             aes(x = longitude, y = latitude, color = Latinx_prop),
+             shape = 20, 
+             size = 4, 
+             alpha = 0.85) +
+  scale_color_continuous(name="Latinx Proportion", 
+                         low = "lightblue", 
+                         high = "darkblue",
+                         labels = label_number(accuracy = 0.01)) +
+  labs(title = "2018 Latinx Staying Proportion by Observation Site") +
+  labs(fill="Observation Sites")
+
+# Save Map_2018_dot in the Visualization folder ----
+ggsave(filename = "2018_raceRatio_Latinx_map_dot.png", path = here("Visualization"), bg="white", width = 7, height = 7)
+```
+
+
+## 2018 map - Multiracial
+```{r}
+ggplot() +
+  geom_sf(data = SEA_map) + #plot base SEA neighborhood map
+  geom_point(data = race_prop_18_locid_geo, 
+             aes(x = longitude, y = latitude, color = Multi_prop),
+             shape = 20, 
+             size = 4, 
+             alpha = 0.85) +
+  scale_color_continuous(name="Multiracial Proportion",
+                         low = "lightblue", 
+                         high = "darkblue",
+                         labels = label_number(accuracy = 0.01)) +
+  labs(title = "2018 Multiracial Staying Proportion by Observation Site") +
+  labs(fill="Observation Sites")
+
+# Save Map_2018_dot in the Visualization folder ----
+ggsave(filename = "2018_raceRatio_Multi_map_dot.png", path = here("Visualization"), bg="white", width = 7, height = 7)
+```
+
+
+## 2018 map - Native American
+```{r}
+ggplot() +
+  geom_sf(data = SEA_map) + #plot base SEA neighborhood map
+  geom_point(data = race_prop_18_locid_geo, 
+             aes(x = longitude, y = latitude, color = NatAm_prop),
+             shape = 20, 
+             size = 4, 
+             alpha = 0.85) +
+  scale_color_continuous(name="Native American Proportion",
+                         low = "lightblue", 
+                         high = "darkblue",
+                         labels = label_number(accuracy = 0.01)) +
+  labs(title = "2018 Native American Staying Proportion by Observation Site") +
+  labs(fill="Observation Sites")
+
+# Save Map_2018_dot in the Visualization folder ----
+ggsave(filename = "2018_raceRatio_NatAm_map_dot.png", path = here("Visualization"), bg="white", width = 7, height = 7)
+```
+
+
+## 2018 map - White
+```{r}
+ggplot() +
+  geom_sf(data = SEA_map) + #plot base SEA neighborhood map
+  geom_point(data = race_prop_18_locid_geo, 
+             aes(x = longitude, y = latitude, color = White_prop),
+             shape = 20, 
+             size = 4, 
+             alpha = 0.85) +
+  scale_color_continuous(name="White Proportion",
+                         low = "lightblue", 
+                         high = "darkblue",
+                         limits = c(0,1),
+                         labels = label_number(accuracy = 0.01)) +
+  labs(title = "2018 White Staying Proportion by Observation Site") +
+  labs(fill="Observation Sites")
+
+# Save Map_2018_dot in the Visualization folder ----
+ggsave(filename = "2018_raceRatio_White_map_dot.png", path = here("Visualization"), bg="white", width = 7, height = 7)
+```
+
+## 2018 race - interactive plot
+```{r}
+p <- ggplot() +
+  geom_sf(data = SEA_map) + #plot base SEA neighborhood map
+  geom_point(data = race_prop_18_locid_geo, 
+             aes(x = longitude, y = latitude, color = White_prop,
+             text = paste(
+             "Block Face: ", location_id, 
+             "<br>Percentage of White: ", round(White_prop,2), 
+             "<br>Percentage of Black: ", round(Black_prop,2),
+             "<br>Percentage of Asian: ", round(Asian_prop,2),
+             "<br>Percentage of Latinx: ", round(Latinx_prop,2),
+             "<br>Percentage of Native American: ", round(NatAm_prop,2),
+             "<br>Percentage of Multiracial: ", round(Multi_prop,2),
+             "<br>Total observation: ", total_count)), 
+             shape = 20, 
+             size = 4, 
+             alpha = 0.85)+
+  scale_color_continuous(name="Percentage of White People Staying",
+                         low = "lightblue", 
+                         high = "darkblue",
+                         limits = c(0,1),
+                         labels = label_number(accuracy = 0.01)) +
+  labs(title = "2018 White Staying Proportion by Observation Site") +
+  labs(fill="Observation Sites")
+
+
+p <- ggplotly(, tooltip = "text")
+saveWidget(p, here("Interactive", "2018_Race_interactive.html"), selfcontained = FALSE, libdir = "libs")
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
