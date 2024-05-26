@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Index Page</title>
+    <style>
+        body {
+            font-family: 'Times New Roman', Times, serif, sans-serif;
+        }
+        .navbar {
+            overflow: hidden;
+            background-color: #333;
+        }
+        .navbar a {
+            float: left;
+            display: block;
+            color: white;
+            text-align: center;
+            padding: 14px 16px;
+            text-decoration: none;
+        }
+        .navbar a:hover {
+            background-color: #ddd;
+            color: black;
+        }
+        .content {
+            text-align: center;
+            margin-top: 50px;
+        }
+    </style>
+</head>
+<body>
+    <div class="navbar">
+        <a href="gender.html">Gender</a>
+        <a href="race.html">Race</a>
+        <a href="age.html">Age</a>
+    </div>
+
+    <div class = "content">
+        <h1>Seattle Public Life: Mapping Project </h1>
+    </div>
+
+    <div>
+        <p> This project uses data from the Seattle Public Life Study to map changes in public life from 2018 to 2023. We looked at the distributio of race, gender, and age groups in different neighborhoods of Seattle.
+            Click on the navigation links to see the interactive plots about people staying in 2018-2023 by gender, age, and race.</p>
+    </div>
+
+    <div class = "content">
+        <h1> Ethics Statement </h1>
+    </div>
+
+    <div>
+        <p> The main ethical issue with using the Seattle Public Life data is that “participants” in these 
+            large datasets did not consent to being part of the study. The metadata document states that the 
+            study “completed a Privacy Assessment through the City of Seattle IT Department” (page 3 of 
+            metadata document).While this takes a legal route to ensuring participants’ privacy is not 
+            disrupted, participants were never informed nor could consent to being recorded at the various 
+            public locations in Seattle. As users of this public dataset, there is not much we can do to 
+            change the beneficence or justice requirements laid out in Paxton (2020). However, we only 
+            analyze the dataset by one demographic at a time, to reduce the chances of identifying specific 
+            participants. </p>
+
+        <p>As researchers, we have sought to represent participants’ unique experiences based on several 
+            demographic variables: gender, race, and age. In earlier iterations of our graphs, we had simply 
+            collapsed demographic variables into a single marker that only considered the largest subgroups 
+            of participants (i.e., female-to-male ratio, underrepresented minority-to-White ratio). We 
+            realized that this erased the experiences of non-binary people (for the gender variable) and 
+            lumped all people of color into one group (for the race variable). Our group decided that 
+            although it would significantly increase the number of visualizations our team produced, we 
+            would create visualizations for the percentage of each subgroup throughout Seattle. This meant 
+            creating maps for each level of the gender, race, and age variables - totaling 14 visualizations 
+            instead of 3.</p>
+    </div>
+</body>
+</html>
