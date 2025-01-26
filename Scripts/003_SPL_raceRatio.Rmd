@@ -246,7 +246,7 @@ p <- ggplot() +
 
 
 p <- ggplotly(, tooltip = "text")
-saveWidget(p, here("Interactive", "2018_Race_interactive.html"), selfcontained = FALSE, libdir = "libs")
+saveWidget(p, here("docs", "2018_Race_interactive.html"), selfcontained = FALSE, libdir = "libs")
 
 ```
 
