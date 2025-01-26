@@ -81,6 +81,12 @@ race_prop_locid <- SPL_18 %>%
          NatAm_prop  = round(Observed_N/total_count, 2),
          White_prop  = round(Observed_W/total_count, 2)) %>%
   select(location_id, Asian_prop, Black_prop, Latinx_prop, Multi_prop, NatAm_prop, White_prop, total_count) # Adding the total count for the interactive plots
+
+# Add S_HOOD back
+race_prop_locid <- SPL_1823 %>%
+  select(location_id, S_HOOD) %>%
+  distinct() %>%
+  right_join(race_prop_locid, by = "location_id")
 ```
 
 # Join location_id coordinates with 2018 filtered data
@@ -226,6 +232,7 @@ p <- ggplot() +
              aes(x = longitude, y = latitude, color = White_prop,
              text = paste(
              "Block Face: ", location_id, 
+             "<br>Neighborhood: ", S_HOOD,
              "<br>Percentage of White: ", round(White_prop,2), 
              "<br>Percentage of Black: ", round(Black_prop,2),
              "<br>Percentage of Asian: ", round(Asian_prop,2),
@@ -236,7 +243,7 @@ p <- ggplot() +
              shape = 20, 
              size = 4, 
              alpha = 0.85)+
-  scale_color_continuous(name="Percentage of White People Staying",
+  scale_color_continuous(name="White/Total",
                          low = "lightblue", 
                          high = "darkblue",
                          limits = c(0,1),
