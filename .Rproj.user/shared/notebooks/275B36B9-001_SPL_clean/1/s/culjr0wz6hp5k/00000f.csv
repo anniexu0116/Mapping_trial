@@ -1,0 +1,3 @@
+"0","#Create a separate dataset for 2018 and 2023 data"
+"0","SPL_1823 <- SPL %>%"
+"0","  filter(study_id==""2018_Seattle_Citywide"" | study_id ==""2023_Seattle_Citywide"")"

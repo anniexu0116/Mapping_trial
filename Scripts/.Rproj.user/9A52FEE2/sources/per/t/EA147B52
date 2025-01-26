@@ -1,0 +1,25 @@
+{
+    "id": "EA147B52",
+    "path": "~/Documents/Mapping_trial/Scripts/001_SPL_clean.Rmd",
+    "project_path": "001_SPL_clean.Rmd",
+    "type": "r_markdown",
+    "hash": "693052672",
+    "contents": "",
+    "dirty": false,
+    "created": 1715839172327.0,
+    "source_on_save": false,
+    "relative_order": 2,
+    "properties": {
+        "source_window_id": "",
+        "Source": "Source",
+        "last_setup_crc32": "884e01f7bb338d19"
+    },
+    "folds": "",
+    "lastKnownWriteTime": 1714537172,
+    "encoding": "UTF-8",
+    "collab_server": "",
+    "source_window": "",
+    "last_content_update": 1715839174388,
+    "read_only": false,
+    "read_only_alternatives": []
+}
